@@ -36,10 +36,12 @@ func SingleHash(in, out chan interface{}) {
 	var wg sync.WaitGroup
 	throttle := make(chan struct{}, 1)
 	throttle <- struct{}{}
+
 	for data := range in {
-		wg.Add(1)
 		data := fmt.Sprintf("%v", data)
 		fmt.Println("SingleHash data:", data)
+		wg.Add(1)
+
 		go func(dt string, o chan interface{}, th chan struct{}, w *sync.WaitGroup) {
 			defer w.Done()
 			var o1, o2 chan string
@@ -74,25 +76,42 @@ func SingleHash(in, out chan interface{}) {
 			out <- result
 		}(data, out, throttle, &wg)
 	}
+
 	wg.Wait()
 	close(throttle)
 }
 
 func MultiHash(in, out chan interface{}) {
 	// crc32(th+data)) th=0..5
+	var wg sync.WaitGroup
 	for d := range in {
 		data := fmt.Sprintf("%v", d)
 		fmt.Println("MultiHash data:", data)
-		var result string
-		for i := 0; i < 6; i++ {
-			val := DataSignerCrc32(strconv.Itoa(i) + data)
-			fmt.Println("MultiHash crc32(th+data):", val)
-			result += val
-		}
-		fmt.Println("MultiHash result:", result)
+		wg.Add(1)
 
-		out <- result
+		go func(dt string, ot chan interface{}, w *sync.WaitGroup) {
+			defer w.Done()
+			result := ""
+			var results [6]chan string
+
+			for i := 0; i < 6; i++ {
+				results[i] = make(chan string, 1)
+				go func(o chan string, th int, d string) {
+					val := DataSignerCrc32(strconv.Itoa(th) + d)
+					fmt.Println("MultiHash crc32(th+data):", val)
+					o <- val
+				}(results[i], i, dt)
+
+			}
+			for _, c := range results {
+				result += <-c
+			}
+			fmt.Println("MultiHash result:", result)
+
+			ot <- result
+		}(data, out, &wg)
 	}
+	wg.Wait()
 }
 
 func CombineResults(in, out chan interface{}) {
