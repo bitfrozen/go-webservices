@@ -79,3 +79,32 @@ func SingleHash(in, out chan interface{}) {
 	wg.Wait()
 	close(throttle)
 }
+
+func MultiHash(in, out chan interface{}) {
+	// crc32(th+data)) th=0..5
+	for d := range in {
+		data := fmt.Sprintf("%v", d)
+		fmt.Println("MultiHash data:", data)
+		var result string
+		for i := 0; i < 6; i++ {
+			val := DataSignerCrc32(strconv.Itoa(i) + data)
+			fmt.Println("MultiHash crc32(th+data):", val)
+			result += val
+		}
+		fmt.Println("MultiHash result:", result)
+
+		out <- result
+	}
+}
+
+func CombineResults(in, out chan interface{}) {
+	var results []string
+	for d := range in {
+		data := fmt.Sprintf("%v", d)
+		results = append(results, data)
+	}
+	sort.Strings(results)
+	result := strings.Join(results, "_")
+	fmt.Println("Combine result:", result)
+	out <- result
+}
