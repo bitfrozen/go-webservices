@@ -1,7 +1,5 @@
 package main
 
-// сюда писать кодpackage main
-
 import (
 	"fmt"
 	"sort"
@@ -107,4 +105,31 @@ func CombineResults(in, out chan interface{}) {
 	result := strings.Join(results, "_")
 	fmt.Println("Combine result:", result)
 	out <- result
+}
+
+func main() {
+	testResult := "NOT_SET"
+	inputData := []int{0, 1}
+
+	hashSignJobs := []job{
+		job(func(in, out chan interface{}) {
+			for _, fibNum := range inputData {
+				fmt.Println("pushing to out channel value", fibNum)
+				out <- fibNum
+			}
+		}),
+		job(SingleHash),
+		job(MultiHash),
+		job(CombineResults),
+		job(func(in, out chan interface{}) {
+			dataRaw := <-in
+			data, ok := dataRaw.(string)
+			if !ok {
+				fmt.Println("cant convert result data to string")
+				return
+			}
+			testResult = data
+		}),
+	}
+	ExecutePipeline(hashSignJobs...)
 }
