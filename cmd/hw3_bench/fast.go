@@ -8,16 +8,30 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/mailru/easyjson"
+	"github.com/mailru/easyjson/jlexer"
+	"github.com/mailru/easyjson/jwriter"
+)
+
+// suppress unused package warning
+var (
+	_ *json.RawMessage
+	_ *jlexer.Lexer
+	_ *jwriter.Writer
+	_ easyjson.Marshaler
 )
 
 type User struct {
 	Name     string   `json:"name"`
-	Phone    string   `json:"phone"`
-	Job      string   `json:"job"`
 	Email    string   `json:"email"`
-	Country  string   `json:"country"`
-	Company  string   `json:"company"`
 	Browsers []string `json:"browsers"`
+}
+
+func (v *User) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjsonDecode(&r, v)
+	return r.Error()
 }
 
 var userPool = sync.Pool{
@@ -42,12 +56,10 @@ func FastSearch(out io.Writer) {
 		lineCounter++
 
 		user := userPool.Get().(*User)
-		err := json.Unmarshal(bytes, user)
+		err := user.UnmarshalJSON(bytes)
 		if err != nil {
 			panic(err)
 		}
-		//users = append(users, *user)
-		userPool.Put(user)
 
 		isAndroid := false
 		isMSIE := false
@@ -85,6 +97,7 @@ func FastSearch(out io.Writer) {
 		}
 
 		if !(isAndroid && isMSIE) {
+			userPool.Put(user)
 			continue
 		}
 
@@ -92,6 +105,7 @@ func FastSearch(out io.Writer) {
 		//email := r.ReplaceAllString(user.Email, " [at] ")
 		email := strings.Replace(user.Email, "@", " [at] ", -1)
 		foundUsers += fmt.Sprintf("[%d] %s <%s>\n", lineCounter, user.Name, email)
+		userPool.Put(user)
 	}
 
 	_, err = fmt.Fprintln(out, "found users:\n"+foundUsers)
@@ -104,6 +118,63 @@ func FastSearch(out io.Writer) {
 	}
 }
 
+func easyjsonDecode(in *jlexer.Lexer, out *User) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "name":
+			out.Name = string(in.String())
+		case "email":
+			out.Email = string(in.String())
+		case "browsers":
+			if in.IsNull() {
+				in.Skip()
+				out.Browsers = nil
+			} else {
+				in.Delim('[')
+				if out.Browsers == nil {
+					if !in.IsDelim(']') {
+						out.Browsers = make([]string, 0, 4)
+					} else {
+						out.Browsers = []string{}
+					}
+				} else {
+					out.Browsers = (out.Browsers)[:0]
+				}
+				for !in.IsDelim(']') {
+					var v1 string
+					v1 = string(in.String())
+					out.Browsers = append(out.Browsers, v1)
+					in.WantComma()
+				}
+				in.Delim(']')
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+
 func main() {
-	FastSearch(os.Stdout)
+
 }
