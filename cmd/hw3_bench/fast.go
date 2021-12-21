@@ -40,6 +40,12 @@ var userPool = sync.Pool{
 
 func FastSearch(out io.Writer) {
 	file, err := os.Open(filePath)
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(file)
 	if err != nil {
 		panic(err)
 	}
