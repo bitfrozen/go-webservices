@@ -300,14 +300,6 @@ func TestFindUsersNegativeOffset(t *testing.T) {
 
 func TestFindUsersAllRequestFieldsExist(t *testing.T) {
 	fk := func(w http.ResponseWriter, r *http.Request) {
-		headers := r.Header.Values("AccessToken")
-		if len(headers) == 0 {
-			t.Error("AccessToken header missing")
-			return
-		}
-		if headers[0] == "" {
-			t.Error("AccessToken header value missing")
-		}
 		err := r.ParseForm()
 		if err != nil {
 			t.Error(err)
